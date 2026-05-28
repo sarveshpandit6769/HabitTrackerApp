@@ -2,13 +2,23 @@
   "expo": {
     "name": "HabitTrackerApp",
     "slug": "HabitTrackerApp",
+    "projectId": "283928a8-bf25-44b8-8473-4c082aad9250",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "habittrackerapp",
     "userInterfaceStyle": "automatic",
+    "updates": {
+      "url": "https://u.expo.dev/283928a8-bf25-44b8-8473-4c082aad9250",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
+    },
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.sarvesh.habittracker",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.sarvesh.habittracker",
@@ -26,6 +36,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-updates",
       [
         "expo-splash-screen",
         {
@@ -46,6 +57,9 @@
       "eas": {
         "projectId": "283928a8-bf25-44b8-8473-4c082aad9250"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }

@@ -1,98 +1,233 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
+import {
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+type Habit = {
+  id: string;
+  name: string;
+  completedDates: string[];
+};
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
+const STORAGE_KEY = "habits";
+
+function getTodayDate() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function getStreak(completedDates: string[]) {
+  let streak = 0;
+  let currentDate = new Date();
+
+  while (true) {
+    const dateString = currentDate.toISOString().split("T")[0];
+
+    if (completedDates.includes(dateString)) {
+      streak++;
+      currentDate.setDate(currentDate.getDate() - 1);
+    } else {
+      break;
+    }
   }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
+
+  return streak;
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const [habits, setHabits] = useState<Habit[]>([]);
+
+  const loadHabits = async () => {
+    const savedHabits = await AsyncStorage.getItem(STORAGE_KEY);
+    if (savedHabits) {
+      setHabits(JSON.parse(savedHabits));
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadHabits();
+    }, [])
+  );
+
+  const saveHabits = async (updatedHabits: Habit[]) => {
+    setHabits(updatedHabits);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedHabits));
+  };
+
+  const toggleToday = async (habitId: string) => {
+    const today = getTodayDate();
+
+    const updatedHabits = habits.map((habit) => {
+      if (habit.id === habitId) {
+        const alreadyDone = habit.completedDates.includes(today);
+
+        return {
+          ...habit,
+          completedDates: alreadyDone
+            ? habit.completedDates.filter((date) => date !== today)
+            : [...habit.completedDates, today],
+        };
+      }
+
+      return habit;
+    });
+
+    saveHabits(updatedHabits);
+  };
+
+  const deleteHabit = (habitId: string) => {
+  const updatedHabits = habits.filter((habit) => habit.id !== habitId);
+  saveHabits(updatedHabits);
+};
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <View style={styles.container}>
+      <Text style={styles.heading}>Today&apos;s Habits</Text>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+      <Pressable style={styles.addButton} onPress={() => router.push("/addHabit")}>
+        <Text style={styles.addButtonText}>+ Add New Habit</Text>
+      </Pressable>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+      <FlatList
+        data={habits}
+        keyExtractor={(item) => item.id}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>No habits yet. Add your first habit.</Text>
+        }
+        renderItem={({ item }) => {
+          const today = getTodayDate();
+          const isDoneToday = item.completedDates.includes(today);
+          const streak = getStreak(item.completedDates);
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+          return (
+            <View style={styles.card}>
+              <View>
+                <Text style={styles.habitName}>{item.name}</Text>
+                <Text style={styles.streakText}>🔥 Current streak: {streak} day(s)</Text>
+              </View>
+
+              <View style={styles.buttonRow}>
+                <Pressable
+                  style={[styles.doneButton, isDoneToday && styles.doneActive]}
+                  onPress={() => toggleToday(item.id)}
+                >
+                  <Text style={styles.doneText}>{isDoneToday ? "Done" : "Mark Done"}</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.historyButton}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/history",
+                      params: { habitId: item.id },
+                    })
+                  }
+                >
+                  <Text style={styles.historyText}>History</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.deleteButton}
+                  onPress={() => deleteHabit(item.id)}
+                >
+                  <Text style={styles.deleteText}>Delete</Text>
+                </Pressable>
+              </View>
+            </View>
+          );
+        }}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+    padding: 20,
+    backgroundColor: "#ffffff",
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+  heading: {
+    fontSize: 28,
+    fontWeight: "700",
+    marginBottom: 16,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  addButton: {
+    backgroundColor: "#000000",
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 18,
   },
-  title: {
-    textAlign: 'center',
+  addButtonText: {
+    color: "white",
+    textAlign: "center",
+    fontWeight: "700",
   },
-  code: {
-    textTransform: 'uppercase',
+  emptyText: {
+    textAlign: "center",
+    marginTop: 60,
+    color: "#777",
+    fontSize: 16,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  card: {
+    backgroundColor: "white",
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 14,
+  },
+  habitName: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  streakText: {
+    marginTop: 6,
+    color: "#666",
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 14,
+    flexWrap: "wrap",
+  },
+  doneButton: {
+    backgroundColor: "#999",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  doneActive: {
+    backgroundColor: "#16A34A",
+  },
+  doneText: {
+    color: "white",
+    fontWeight: "700",
+  },
+  historyButton: {
+    backgroundColor: "#2563EB",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  historyText: {
+    color: "white",
+    fontWeight: "700",
+  },
+  deleteButton: {
+    backgroundColor: "#DC2626",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  deleteText: {
+    color: "white",
+    fontWeight: "700",
   },
 });
